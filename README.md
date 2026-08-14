@@ -3,8 +3,7 @@
 一份前端技術研究，做成**網頁式簡報**：少量的投影片穿插可實際操作的頁面，
 所有數字都在你的瀏覽器當場量出來，不是截圖。
 
-**▶︎ 線上版：** <!-- TODO: 部署後把 GitHub Pages 網址貼在這裡 -->
-`https://<your-account>.github.io/<repo>/`
+**▶︎ 線上版：https://rnovice.github.io/should-you-use-web3d/**
 
 ---
 

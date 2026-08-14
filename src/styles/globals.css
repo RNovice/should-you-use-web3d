@@ -1,0 +1,190 @@
+@import 'tailwindcss';
+
+/*
+ * 簡報用的色票：深底、低飽和、單一強調色。
+ * 刻意克制 —— 背景 3D 動畫不該搶走講者的注意力（見 Q23 的決定）。
+ */
+@theme {
+  --color-ink-950: #070a0f;
+  --color-ink-900: #0b0f16;
+  --color-ink-800: #121822;
+  --color-ink-700: #1c2431;
+  --color-ink-600: #2a3444;
+
+  --color-fg: #e6ecf3;
+  --color-fg-muted: #8b98a9;
+  --color-fg-faint: #5b6675;
+
+  --color-accent: #4fd1c5;
+  --color-accent-dim: #2a8f88;
+  --color-warn: #f0a35e;
+  --color-bad: #e8635f;
+}
+
+/*
+ * 手機用的兩個變體。
+ *
+ * 關鍵：手機橫放是 852px 寬 —— 比 Tailwind 的 md（768px）還寬，
+ * 所以「用寬度判斷是不是手機」會漏掉橫放，修好直立卻留著橫放繼續壞。
+ * 真正的區分特徵是「矮」與「粗指標」，不是「窄」。
+ *
+ *   phone   直立手機（窄）
+ *   short   橫放手機（矮）
+ *   compact 兩者任一 —— 絕大多數規則用這個
+ *
+ * 投影機 1920×1080 / 1280×800 在兩個維度都遠離門檻，
+ * 所以這些規則在投影機上不可能命中。這是「改不壞現場那條路」的來源：
+ * 不是小心，是規則沒有機會套用。
+ */
+@custom-variant phone (@media (max-width: 767px));
+@custom-variant short (@media (max-height: 560px));
+/*
+ * compact 必須用 block 形式列出兩條 @media。
+ * 逗號形式 `(@media (max-width: 767px), (max-height: 560px))` 編譯後
+ * 只會留下寬度那一條，高度那條被靜靜丟掉 —— 也就是橫放手機收不到規則，
+ * 剛好就是這整套設計要避免的那個漏洞。已實測確認。
+ */
+@custom-variant compact {
+  @media (max-width: 767px) {
+    @slot;
+  }
+  @media (max-height: 560px) {
+    @slot;
+  }
+}
+@custom-variant touch (@media (pointer: coarse));
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-ink-950);
+  color: var(--color-fg);
+  font-family:
+    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang TC',
+    'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* 數字要對齊，HUD 的 FPS 才不會跳動 */
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+/* 講者面板 / 展開層的捲軸 */
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-ink-600) transparent;
+}
+
+/*
+ * 換頁動畫。
+ *
+ * Slide 用 key={slide.id} 掛載，所以每次翻頁內容都是全新的節點 ——
+ * 直接掛 CSS animation 就會在進場時播一次，不需要任何狀態管理。
+ *
+ * 逐層延遲讓標題先到、細節後到，視線有落點；總長刻意壓在 0.5 秒內，
+ * 現場翻頁不能等動畫。
+ */
+@keyframes slide-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/*
+ * fill-mode 用 backwards 而不是 both。
+ *
+ * both 會讓動畫在結束後永久保持「生效中」，而一個帶有作用中 transform／opacity
+ * 動畫的元素會做兩件事：成為 position: fixed 子孫的包含塊，
+ * 以及形成 backdrop root（把底下的 canvas 隔離在 backdrop-filter 的取樣範圍外）。
+ * 前者讓手機的浮動按鈕跟著內容捲動，後者讓所有 backdrop-blur 變成完全沒作用 ——
+ * 兩個都實測確認過。
+ *
+ * backwards 只在延遲期間套用起始狀態，動畫結束後就退出生效，
+ * 而結束狀態本來就等於元素的正常樣式（opacity 1、transform none），所以畫面完全一樣。
+ */
+main > div > * {
+  animation: slide-rise 0.42s cubic-bezier(0.22, 0.7, 0.2, 1) backwards;
+}
+main > div > *:nth-child(1) { animation-delay: 0.02s; }
+main > div > *:nth-child(2) { animation-delay: 0.07s; }
+main > div > *:nth-child(3) { animation-delay: 0.12s; }
+main > div > *:nth-child(4) { animation-delay: 0.17s; }
+main > div > *:nth-child(n + 5) { animation-delay: 0.22s; }
+
+/* 互動頁的控制面板不要逐層延遲 —— 現場可能一翻頁就要立刻按 */
+main > div > .flex .pointer-events-auto {
+  animation: slide-rise 0.3s ease-out backwards;
+}
+
+/* 尊重系統的減少動態偏好 */
+@media (prefers-reduced-motion: reduce) {
+  main > div > *,
+  main > div > .flex .pointer-events-auto {
+    animation: none;
+  }
+}
+
+/*
+ * 文字區遮罩。
+ *
+ * 桌機：重心壓在左側、68% 之前放開 —— 右側那條留白帶是給隊形的。
+ * 手機：改成均勻薄紗。直立時文字是滿版的，沒有「右側留白帶」可言，
+ *       左重右輕會變成一半的字沒保護、另一半的裝飾被壓死。
+ */
+.text-scrim {
+  background: radial-gradient(
+    120% 90% at 18% 45%,
+    rgba(7, 10, 15, 0.86) 0%,
+    rgba(7, 10, 15, 0.6) 34%,
+    rgba(7, 10, 15, 0) 64%
+  );
+}
+
+@media (max-width: 767px), (max-height: 560px) {
+  .text-scrim {
+    background: rgba(7, 10, 15, 0.62);
+  }
+}
+
+/*
+ * 表格後面的柔邊暗底。
+ *
+ * 表格文字用的是 fg-muted（刻意壓低，讓標題與數字先被看到），
+ * 但背後有會動的點雲，暗字疊在亮點上就糊掉了。
+ *
+ * 為什麼不是直接畫一個方塊：硬邊的黑框在這種極簡版面上很突兀，
+ * 而且會把「內容浮在場景上」的感覺變成「內容貼在卡片上」。
+ * 這裡用兩道漸層遮罩取交集，四邊都羽化 —— 中間全遮、邊緣淡出，
+ * 看起來像背景自己在表格附近變暗，不像多了一個容器。
+ *
+ * 只壓暗，不做 backdrop-filter。
+ * 實測（表格區非文字像素的 p95）：什麼都不加 28.4，只壓暗 23.4，
+ * 加上模糊 22.6 —— 模糊只多換到 0.8，不值得多一個合成層。
+ *
+ * 不支援 mask 的瀏覽器會退化成一個硬邊暗塊 —— 還是能讀，只是沒那麼好看。
+ */
+.table-scrim {
+  background: rgba(7, 10, 15, 0.62);
+
+  -webkit-mask-image:
+    linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent),
+    linear-gradient(to bottom, transparent, #000 18px, #000 calc(100% - 18px), transparent);
+  mask-image:
+    linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent),
+    linear-gradient(to bottom, transparent, #000 18px, #000 calc(100% - 18px), transparent);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
